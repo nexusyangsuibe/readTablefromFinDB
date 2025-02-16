@@ -128,7 +128,7 @@ def saveConcatedDataAsFinalResult(runtime_code,concatedDF,output_filename,clear_
         print("======开始清空respawnpoint文件夹======")
         for file in os.listdir("respawnpoint/"):
             os.remove("respawnpoint/" + file)
-    return True
+    return None
 
 # csmar functions are as follows
 def getUseColsFromZipFile(target_folder,zip_prefix):
@@ -222,8 +222,8 @@ def concatDataFilesNachZipPrefix(runtime_code,zip_starts_with,target_folder,read
         raise FileNotFoundError(f"在目标文件夹{target_folder}中没有找到任何以{zip_starts_with}开头的压缩文件")
     chunks=tuple(tuple((runtime_code,zip_prefix,target_folder,zip_filename,data_filename,read_table_params[zip_prefix][0],ts_index_column_name,skiprows,csv_delimiter,read_table_params[zip_prefix][1],filter_conditions) for zip_prefix,zip_filename,data_filename in data_file_path) for data_file_path in data_file_paths)
     chunks=tuple(chunk for chunks_with_same_zip_prefix in chunks for chunk in chunks_with_same_zip_prefix)
-    with mp.Pool() as p:
-        results=p.map(readDataFileFromZipFile,chunks)
+    with mp.Pool() as pool:
+        results=pool.map(readDataFileFromZipFile,chunks)
     unique_zip_prefixes=set(result[0] for result in results)
     try:
         concatedDFs=tuple(tuple((zip_prefix,pd.concat((pickle.load(open(result[1],"rb")) for result in results if result[0]==zip_prefix),axis=0))) for zip_prefix in unique_zip_prefixes)
@@ -277,12 +277,12 @@ def concatCnrdsMain(runtime_code,target_folder,usecols,ts_index_column_name,filt
             if filename.split(".")[-1] in ["xlsx","csv"]:
                 news_info_folders.append(os.path.join(filepath,filename))
     chunks=tuple(tuple((file,usecols,ts_index_column_name,filter_conditions,skiprows,csv_delimiter,convert_str_columns)) for file in news_info_folders)
-    pool=mp.Pool()
-    results=pool.map(concatOneCnrdsFile,chunks)
+    with mp.Pool() as pool:
+        results=pool.map(concatOneCnrdsFile,chunks)
     concated_df=pd.concat(results,axis=0)
     concated_df.sort_index(inplace=True)
     saveConcatedDataAsFinalResult(runtime_code,concated_df,output_filename,clear_respawnpoint_upon_conplete)
-    return True
+    return concated_df
 
 def concatDF(runtime_code,data_source,target_folder,usecols,ts_index_column_name,filter_conditions=None,csv_delimiter=None,convert_str_columns=None,output_filename=None,skiprows=None,zip_starts_with=None,clear_respawnpoint_before_run=False,clear_respawnpoint_upon_conplete=False):
     print("合并表格模块开始运行")
@@ -342,13 +342,13 @@ def concatDF(runtime_code,data_source,target_folder,usecols,ts_index_column_name
                 concated_df=concated_df.reset_index().set_index(ts_index_column_name)
                 concated_df=forceConvertIntoDatetimeIndex(concated_df,"concated_df")
             concated_df=filterDF(concated_df,filter_conditions,"concated_df") # Since we use outer join to concat the dataframes, the non-nan trait is not guaranteed, so we need filter again. Some may think a twice filter is redundant and recommend to drop the first filter when reading the data, but I think it is better to keep the first filter to avoid the memory overflow
-            return saveConcatedDataAsFinalResult(runtime_code,concated_df,output_filename,clear_respawnpoint_upon_conplete)
+            saveConcatedDataAsFinalResult(runtime_code,concated_df,output_filename,clear_respawnpoint_upon_conplete)
         else:
             raise ValueError(f"无效的输入{zip_starts_with=}，只能够传入str或list或tuple")
     # the cnrds brench of the function
     elif data_source.lower()=="folder" or data_source.lower()=="cnrds":
-        concatCnrdsMain(runtime_code,target_folder,usecols[0],ts_index_column_name,filter_conditions,csv_delimiter,convert_str_columns[0],output_filename,skiprows,clear_respawnpoint_upon_conplete)
+        concated_df=concatCnrdsMain(runtime_code,target_folder,usecols[0],ts_index_column_name,filter_conditions,csv_delimiter,convert_str_columns[0],output_filename,skiprows,clear_respawnpoint_upon_conplete)
     else:
-        print(f"无效的输入{data_source=}，尝试作为folder解析.")
-        concatCnrdsMain(runtime_code,target_folder,usecols[0],ts_index_column_name,filter_conditions,csv_delimiter,convert_str_columns[0],output_filename,skiprows,clear_respawnpoint_upon_conplete)
-    return True
+        raise ValueError(f"无效的输入{data_source=}，该参数只接受zip, folder, csmar, cnrds")
+    print("合并表格模块运行完成")
+    return concated_df

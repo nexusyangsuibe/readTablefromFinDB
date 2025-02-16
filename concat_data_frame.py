@@ -347,8 +347,8 @@ def concatDF(runtime_code,data_source,target_folder,usecols,ts_index_column_name
             raise ValueError(f"无效的输入{zip_starts_with=}，只能够传入str或list或tuple")
     # the cnrds brench of the function
     elif data_source.lower()=="folder" or data_source.lower()=="cnrds":
-        concatCnrdsMain(runtime_code,target_folder,usecols[0],ts_index_column_name,filter_conditions,csv_delimiter,convert_str_columns[0],output_filename,skiprows,clear_respawnpoint_upon_conplete)
+        concated_df=concatCnrdsMain(runtime_code,target_folder,usecols[0],ts_index_column_name,filter_conditions,csv_delimiter,convert_str_columns[0],output_filename,skiprows,clear_respawnpoint_upon_conplete)
     else:
-        print(f"无效的输入{data_source=}，尝试作为folder解析.")
-        concatCnrdsMain(runtime_code,target_folder,usecols[0],ts_index_column_name,filter_conditions,csv_delimiter,convert_str_columns[0],output_filename,skiprows,clear_respawnpoint_upon_conplete)
+        raise ValueError(f"无效的输入{data_source=}，该参数只接受zip, folder, csmar, cnrds")
+    print("合并表格模块运行完成")
     return concated_df

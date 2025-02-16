@@ -4,7 +4,7 @@ import os
 
 if __name__=="__main__":
 
-    # configure for test3, with a folder with multiple zip prefixes specified and filter is needed but filter_conditions["not_allow_nan_columns"] misspecified (i.e. NewsContent not in the column names)
+    # configure for test1, with a folder with multiple zip prefixes specified and filter is needed but filter_conditions["not_allow_nan_columns"] misspecified (i.e. NewsContent not in the column names)
     concat_df_cfg1={
         # 基础配置
         "runtime_code":"cyj", # 运行时代码，用于区分不同的运行时，用于输出文件名的一部分
@@ -42,7 +42,7 @@ if __name__=="__main__":
         "clear_respawnpoint_upon_conplete":True, # 完成后是否清空respawnpoint文件夹
     }
 
-    # configure for test2, a simple example for cnrds data
+    # configure for test2, a simple test for cnrds data
     concat_df_cfg2={
         # 基础配置
         "runtime_code":"cyj", # 运行时代码，用于区分不同的运行时，用于输出文件名的一部分
@@ -72,11 +72,13 @@ if __name__=="__main__":
     print("开始运行test1")
     t0=time.perf_counter()
     rtn_catdf=concatDF(concat_df_cfg1["runtime_code"],concat_df_cfg1["data_source"],concat_df_cfg1["target_folder"],concat_df_cfg1["usecols"],concat_df_cfg1["ts_index_column_name"],concat_df_cfg1["filter_conditions"],concat_df_cfg1["csv_delimiter"],concat_df_cfg1["convert_str_columns"],concat_df_cfg1["output_filename"],concat_df_cfg1["skiprows"],concat_df_cfg1["zip_starts_with"],concat_df_cfg1["clear_respawnpoint_before_run"],concat_df_cfg1["clear_respawnpoint_upon_conplete"])
+    print(rtn_catdf.head(10))
     print("test1运行完成，用时{:.4f}秒".format(time.perf_counter()-t0))
     
     print("开始运行test2")
     t0=time.perf_counter()
     rtn_catdf=concatDF(concat_df_cfg2["runtime_code"],concat_df_cfg2["data_source"],concat_df_cfg2["target_folder"],concat_df_cfg2["usecols"],concat_df_cfg2["ts_index_column_name"],concat_df_cfg2["filter_conditions"],concat_df_cfg2["csv_delimiter"],concat_df_cfg2["convert_str_columns"],concat_df_cfg2["output_filename"],concat_df_cfg2["skiprows"],concat_df_cfg2["zip_starts_with"],concat_df_cfg2["clear_respawnpoint_before_run"],concat_df_cfg2["clear_respawnpoint_upon_conplete"])
+    print(rtn_catdf.head(10))
     print("test2运行完成，用时{:.4f}秒".format(time.perf_counter()-t0))
     
     print("测试程序运行结束，没有检测到任何异常，你可以检查finalresults文件夹以查看产生的结果文件，请尝试修改配置文件并重新运行以观察变化")
