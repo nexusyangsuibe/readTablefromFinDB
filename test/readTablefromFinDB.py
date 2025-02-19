@@ -112,7 +112,7 @@ def saveConcatedDataAsFinalResult(runtime_code,concatedDF,output_filename,clear_
     if not clear_respawnpoint_upon_conplete or not output_filename:
         pickle.dump(concatedDF,open(f"respawnpoint/{runtime_code}_news_info.pkl","wb"))
     if output_filename:
-        print("======开始将最终结果写入硬盘======")
+        print("开始将最终结果写入硬盘")
         if output_filename.endswith(".pkl"):
             pickle.dump(concatedDF,open(f"finalresults/{output_filename}","wb"))
         elif output_filename.endswith(".xlsx"):
@@ -125,7 +125,7 @@ def saveConcatedDataAsFinalResult(runtime_code,concatedDF,output_filename,clear_
         if not output_filename and input("由于未指定output_filename，finalresults文件夹中不会产生任何结果文件，又clear_respawnpoint_upon_conplete参数为True，将清空respawnpoint文件夹中的所有临时文件，因此您的本次运行不会产生任何可观测的结果，输入y继续，输入其他任意字符取消清空respawnpoint文件夹：").lower()!="y":
             print("用户取消清空respawnpoint文件夹")
             return False # return False to indicate that nothing emerge in either finalresults or respawnpoint
-        print("======开始清空respawnpoint文件夹======")
+        print("开始清空respawnpoint文件夹")
         for file in os.listdir("respawnpoint/"):
             os.remove("respawnpoint/" + file)
     return None
@@ -161,6 +161,25 @@ def checkColumnNamesValidity(usecols,ts_index_column_name,target_folder,zip_star
         if len(usecols)!=len(zip_starts_with):
             raise ValueError(f"指定的{usecols=}与{zip_starts_with=}的长度不匹配，请核查")
         common_columns_4_index=set.intersection(*(set(usecol) for usecol in usecols))
+    if ts_index_column_name=="auto":
+        potential_ts_idx_col=tuple(col for col in common_columns_4_index if re.search(r"(^(date|dt|month|mnt|year|yr))|((date|dt|month|mnt|year|yr)$)",col,flags=re.I))
+        if len(potential_ts_idx_col)==0:
+            print(f"在共同列{common_columns_4_index}中没有找到看似可以作为时间序列索引的列名")
+            ts_index_column_name=None
+        elif len(potential_ts_idx_col)==1:
+            if input(f"在共同列{common_columns_4_index}中发现了唯一看似可以作为时间序列索引的列名{potential_ts_idx_col[0]}，是否将其作为时间序列索引，输入y确认，输入其他任意字符取消：").lower()=="y":
+                ts_index_column_name=potential_ts_idx_col[0]
+            else:
+                ts_index_column_name=None
+        else:
+            print(f"在共同列{common_columns_4_index}中发现了多个看似可以作为时间序列索引的列名{dict(enumerate(potential_ts_idx_col))}")
+            while True:
+                res=input("您要将哪一列作为时间序列索引，请输入序号，若不需要时间序列索引可以输入其他任意字符取消")
+                if res.isdigit() and int(res) in range(len(potential_ts_idx_col)):
+                    ts_index_column_name=potential_ts_idx_col[res]
+                else:
+                    print(f"您的输入{res}不在可选的序号中，视为不需要时间序列索引")
+                    ts_index_column_name=None
     if ts_index_column_name and ts_index_column_name not in common_columns_4_index:
         raise ValueError(f"指定的{ts_index_column_name=}不在{common_columns_4_index=}中，请核查")
     if not ts_index_column_name:
@@ -171,7 +190,7 @@ def checkColumnNamesValidity(usecols,ts_index_column_name,target_folder,zip_star
             if (overlapped_cols:=set(usecols[i]).intersection(set(usecols[j]))-common_columns_4_index)!=set():
                 overlapped_columns_besides_common_columns_4_index.append((zip_starts_with[i],zip_starts_with[j],overlapped_cols))
     common_columns_4_index=list(common_columns_4_index)
-    return common_columns_4_index,overlapped_columns_besides_common_columns_4_index,usecols
+    return common_columns_4_index,overlapped_columns_besides_common_columns_4_index,usecols,ts_index_column_name
 
 def getDataFiles4OneZipPrefix(target_folder,zip_prefix):
     # find all zip files in the target folder with specified prefix
@@ -284,8 +303,16 @@ def concatCnrdsMain(runtime_code,target_folder,usecols,ts_index_column_name,filt
     saveConcatedDataAsFinalResult(runtime_code,concated_df,output_filename,clear_respawnpoint_upon_conplete)
     return concated_df
 
-def concatDF(runtime_code,data_source,target_folder,usecols,ts_index_column_name,filter_conditions=None,csv_delimiter=None,convert_str_columns=None,output_filename=None,skiprows=None,zip_starts_with=None,clear_respawnpoint_before_run=False,clear_respawnpoint_upon_conplete=False):
+# main function
+def readTablefromFinDB(runtime_code,data_source,target_folder,csv_delimiter,usecols,ts_index_column_name,skiprows,convert_str_columns,output_filename,zip_starts_with,filter_conditions,clear_respawnpoint_before_run,clear_respawnpoint_upon_conplete):
     print("合并表格模块开始运行")
+    # create folder if not exists
+    if "respawnpoint" not in os.listdir():
+        print(f"在工作目录{os.getcwd()}下未找到用于存储临时文件的respawnpoint文件夹，将自动创建")
+        os.mkdir("respawnpoint")
+    if "finalresults" not in os.listdir():
+        print(f"在工作目录{os.getcwd()}下未找到用于存储最终结果的finalresults文件夹，将自动创建")
+        os.mkdir("finalresults")
     # clear the respawnpoint folder before running if needed
     if clear_respawnpoint_before_run:
         for file in os.listdir("respawnpoint/"):
@@ -300,8 +327,12 @@ def concatDF(runtime_code,data_source,target_folder,usecols,ts_index_column_name
     if (usecols[0][0]=="all" and usecols[0][0]=="auto") and (convert_str_columns[0][0]!="auto"):
         raise ValueError("当usecols为'all'或'auto'时convert_str_columns也应为'auto'，否则无法正确推断读取文件的顺序")
     if filter_conditions:
-        if not filter_conditions["not_allow_nan_columns"]:
+        if not filter_conditions.get("not_allow_nan_columns",None):
             filter_conditions["not_allow_nan_columns"]=set()
+        filter_conditions["start_date"]=filter_conditions.get("start_date",None)
+        filter_conditions["end_date"]=filter_conditions.get("end_date",None)
+        filter_conditions["not_str_filter_conditions"]=filter_conditions.get("not_str_filter_conditions",None)
+        filter_conditions["str_filter_conditions"]=filter_conditions.get("str_filter_conditions",None)
         if type(filter_conditions["start_date"])==int: # 2010=>"2010"
             filter_conditions["start_date"]=str(filter_conditions["start_date"])
         if type(filter_conditions["end_date"])==int:
@@ -328,7 +359,7 @@ def concatDF(runtime_code,data_source,target_folder,usecols,ts_index_column_name
             zip_starts_with=(zip_starts_with,)
         # the main process of the concatDF function for csmar data
         if type(zip_starts_with) in (list,tuple):
-            common_columns_4_index,overlapped_columns_besides_common_columns_4_index,usecols=checkColumnNamesValidity(usecols,ts_index_column_name,target_folder,zip_starts_with)
+            common_columns_4_index,overlapped_columns_besides_common_columns_4_index,usecols,ts_index_column_name=checkColumnNamesValidity(usecols,ts_index_column_name,target_folder,zip_starts_with)
             concated_dfs=concatCsmarMain(runtime_code,target_folder,usecols,ts_index_column_name,filter_conditions,csv_delimiter,convert_str_columns,zip_starts_with,skiprows)
             print("表格读取完成，开始执行横向合并操作")
             for overlapped_column in overlapped_columns_besides_common_columns_4_index:
@@ -352,3 +383,27 @@ def concatDF(runtime_code,data_source,target_folder,usecols,ts_index_column_name
         raise ValueError(f"无效的输入{data_source=}，该参数只接受zip, folder, csmar, cnrds")
     print("合并表格模块运行完成")
     return concated_df
+
+def readTablefromFinDBusingConfigMenu(config_menu):
+    # a shortcut to run the code using a config menu to avoid input to many parameters
+    runtime_code=config_menu["runtime_code"]
+    data_source=config_menu["data_source"]
+    target_folder=config_menu["target_folder"]
+    csv_delimiter=config_menu.get("csv_delimiter",",")
+    usecols=config_menu.get("usecols","all")
+    ts_index_column_name=config_menu.get("ts_index_column_name","auto")
+    skiprows=config_menu.get("skiprows","my_null_indicator")
+    if skiprows=="my_null_indicator":
+        if data_source.lower() in ["zip","csmar"]:
+            skiprows=[1,2]
+        elif data_source.lower() in ["folder","cnrds"]:
+            skiprows=[1]
+        else:
+            raise ValueError(f"用户没有指定参数{skiprows}，且''data_source'参数设置为{data_source}也不符合要求，无法进行合理推断")
+    convert_str_columns=config_menu.get("convert_str_columns","auto")
+    output_filename=config_menu.get("output_filename",None)
+    zip_starts_with=config_menu.get("zip_starts_with","all")
+    filter_conditions=config_menu.get("filter_conditions",None)
+    clear_respawnpoint_before_run=config_menu.get("clear_respawnpoint_before_run",True)
+    clear_respawnpoint_upon_conplete=config_menu.get("clear_respawnpoint_upon_conplete",True)
+    return readTablefromFinDB(runtime_code,data_source,target_folder,csv_delimiter,usecols,ts_index_column_name,skiprows,convert_str_columns,output_filename,zip_starts_with,filter_conditions,clear_respawnpoint_before_run,clear_respawnpoint_upon_conplete)
