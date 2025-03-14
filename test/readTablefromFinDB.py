@@ -162,7 +162,7 @@ def checkColumnNamesValidity(usecols,ts_index_column_name,target_folder,zip_star
             raise ValueError(f"指定的{usecols=}与{zip_starts_with=}的长度不匹配，请核查")
         common_columns_4_index=set.intersection(*(set(usecol) for usecol in usecols))
     if ts_index_column_name=="auto":
-        potential_ts_idx_col=tuple(col for col in common_columns_4_index if re.search(r"(^(date|dt|month|mnt|year|yr))|((date|dt|month|mnt|year|yr)$)",col,flags=re.I))
+        potential_ts_idx_col=tuple(col for col in common_columns_4_index if re.search(r"(^(date|dt|month|mnt|year|yr|Accper))|((date|dt|month|mnt|year|yr|Accper)$)",col,flags=re.I))
         if len(potential_ts_idx_col)==0:
             print(f"在共同列{common_columns_4_index}中没有找到看似可以作为时间序列索引的列名")
             ts_index_column_name=None
@@ -173,13 +173,13 @@ def checkColumnNamesValidity(usecols,ts_index_column_name,target_folder,zip_star
                 ts_index_column_name=None
         else:
             print(f"在共同列{common_columns_4_index}中发现了多个看似可以作为时间序列索引的列名{dict(enumerate(potential_ts_idx_col))}")
-            while True:
-                res=input("您要将哪一列作为时间序列索引，请输入序号，若不需要时间序列索引可以输入其他任意字符取消")
-                if res.isdigit() and int(res) in range(len(potential_ts_idx_col)):
-                    ts_index_column_name=potential_ts_idx_col[res]
-                else:
-                    print(f"您的输入{res}不在可选的序号中，视为不需要时间序列索引")
-                    ts_index_column_name=None
+            res=input("您要将哪一列作为时间序列索引，请输入序号，若不需要时间序列索引可以输入其他任意字符取消：")
+            if res.isdigit() and int(res) in range(len(potential_ts_idx_col)):
+                ts_index_column_name=potential_ts_idx_col[int(res)]
+                print(f"您选择了{ts_index_column_name}作为时间序列索引")
+            else:
+                print(f"您的输入{res}不在可选的序号中，视为不需要时间序列索引")
+                ts_index_column_name=None
     if ts_index_column_name and ts_index_column_name not in common_columns_4_index:
         raise ValueError(f"指定的{ts_index_column_name=}不在{common_columns_4_index=}中，请核查")
     if not ts_index_column_name:
