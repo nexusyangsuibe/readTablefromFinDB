@@ -131,7 +131,7 @@ def saveConcatedDataAsFinalResult(runtime_code,concatedDF,output_filename,clear_
     return None
 
 # csmar functions are as follows
-def getUseColsFromZipFile(target_folder,zip_prefix):
+def getUseColsFromZipFile(target_folder,zip_prefix,skiprows):
     # get the column names of the first xlsx or csv file in the first zip file with specified prefix
     tgtZip=(file for file in os.listdir(target_folder) if is_zipfile(f"{target_folder}/{file}") and file.startswith(zip_prefix)).__next__()
     with ZipFile(f"{target_folder}/{tgtZip}") as myzip:
@@ -141,24 +141,28 @@ def getUseColsFromZipFile(target_folder,zip_prefix):
             if file_ext in ["xlsx","csv"]:
                 if file_ext=="xlsx":
                     with myzip.open(filename,"r") as myfile:
-                        usecols=tuple(pd.read_excel(BytesIO(myfile.read()),nrows=0).columns)
+                        usecols=tuple(pd.read_excel(BytesIO(myfile.read()),skiprows=skiprows,nrows=0).columns)
                 elif file_ext=="csv":
                     with myzip.open(filename,"r") as myfile:
-                        usecols=tuple(pd.read_csv(BytesIO(myfile.read()),nrows=0).columns)
+                        usecols=tuple(pd.read_csv(BytesIO(myfile.read()),skiprows=skiprows,nrows=0).columns)
                 print(f"对于以'{zip_prefix}'为前缀的压缩文件，通过读取{tgtZip}/{filename}自动推断usecols为{usecols}")
                 break
         else:
             raise FileNotFoundError(f"在目标压缩文件{target_folder}/{tgtZip}中未找到任何以xlsx或csv为后缀的文件")
     return usecols,zip_prefix
 
-def checkColumnNamesValidity(usecols,ts_index_column_name,target_folder,zip_starts_with):
+def checkColumnNamesValidity(usecols,ts_index_column_name,skiprows,target_folder,zip_starts_with=None):
     # check whether there are overlapped columns in different zip files
     if usecols[0][0]=="auto" or usecols[0][0]=="all":
-        usecols_inferred=tuple((getUseColsFromZipFile(target_folder,zip_prefix) for zip_prefix in zip_starts_with))
-        usecols=[usecol[0] for usecol in usecols_inferred]
-        common_columns_4_index=set.intersection(*(set(usecol[0]) for usecol in usecols_inferred))
+        if zip_starts_with: # csmar mode
+            usecols_inferred=tuple((getUseColsFromZipFile(target_folder,zip_prefix,skiprows=skiprows) for zip_prefix in zip_starts_with))
+            usecols=[usecol[0] for usecol in usecols_inferred]
+            common_columns_4_index=set.intersection(*(set(usecol[0]) for usecol in usecols_inferred))
+        else: # cnrds mode
+            usecols_inferred=tuple(pd.read_excel(target_folder[0],skiprows=skiprows,nrows=0).columns)
+            common_columns_4_index=set(usecols_inferred)
     else:
-        if len(usecols)!=len(zip_starts_with):
+        if zip_starts_with and len(usecols)!=len(zip_starts_with):
             raise ValueError(f"指定的{usecols=}与{zip_starts_with=}的长度不匹配，请核查")
         common_columns_4_index=set.intersection(*(set(usecol) for usecol in usecols))
     if ts_index_column_name=="auto":
@@ -295,7 +299,11 @@ def concatCnrdsMain(runtime_code,target_folder,usecols,ts_index_column_name,filt
         for filename in filenames:
             if filename.split(".")[-1] in ["xlsx","csv"]:
                 news_info_folders.append(os.path.join(filepath,filename))
-    chunks=tuple(tuple((file,usecols,ts_index_column_name,filter_conditions,skiprows,csv_delimiter,convert_str_columns)) for file in news_info_folders)
+    common_columns_4_index,_,_,ts_index_column_name=checkColumnNamesValidity(usecols,ts_index_column_name,skiprows,news_info_folders)
+    if convert_str_columns[0][0]=="auto":
+        convert_str_columns=tuple(col for col in common_columns_4_index if re.search(r"(^(symbol|code|id|cd))|((symbol|code|id|cd)$)",col,flags=re.I))
+        print(f"自动推断convert_str_columns为{convert_str_columns}")
+    chunks=tuple(tuple((file,common_columns_4_index,ts_index_column_name,filter_conditions,skiprows,csv_delimiter,convert_str_columns)) for file in news_info_folders)
     with mp.Pool() as pool:
         results=pool.map(concatOneCnrdsFile,chunks)
     concated_df=pd.concat(results,axis=0)
@@ -359,7 +367,7 @@ def readTablefromFinDB(runtime_code,data_source,target_folder,csv_delimiter,usec
             zip_starts_with=(zip_starts_with,)
         # the main process of the concatDF function for csmar data
         if type(zip_starts_with) in (list,tuple):
-            common_columns_4_index,overlapped_columns_besides_common_columns_4_index,usecols,ts_index_column_name=checkColumnNamesValidity(usecols,ts_index_column_name,target_folder,zip_starts_with)
+            common_columns_4_index,overlapped_columns_besides_common_columns_4_index,usecols,ts_index_column_name=checkColumnNamesValidity(usecols,ts_index_column_name,skiprows,target_folder,zip_starts_with)
             concated_dfs=concatCsmarMain(runtime_code,target_folder,usecols,ts_index_column_name,filter_conditions,csv_delimiter,convert_str_columns,zip_starts_with,skiprows)
             print("表格读取完成，开始执行横向合并操作")
             for overlapped_column in overlapped_columns_besides_common_columns_4_index:
@@ -378,7 +386,7 @@ def readTablefromFinDB(runtime_code,data_source,target_folder,csv_delimiter,usec
             raise ValueError(f"无效的输入{zip_starts_with=}，只能够传入str或list或tuple")
     # the cnrds brench of the function
     elif data_source.lower()=="folder" or data_source.lower()=="cnrds":
-        concated_df=concatCnrdsMain(runtime_code,target_folder,usecols[0],ts_index_column_name,filter_conditions,csv_delimiter,convert_str_columns[0],output_filename,skiprows,clear_respawnpoint_upon_conplete)
+        concated_df=concatCnrdsMain(runtime_code,target_folder,usecols,ts_index_column_name,filter_conditions,csv_delimiter,convert_str_columns,output_filename,skiprows,clear_respawnpoint_upon_conplete)
     else:
         raise ValueError(f"无效的输入{data_source=}，该参数只接受zip, folder, csmar, cnrds")
     print("合并表格模块运行完成")
