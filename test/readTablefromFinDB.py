@@ -269,7 +269,8 @@ def readDataFileFromZipFile(chunk):
         ensureDFCorrectPklDump(df,store_path) # here we store the data in a pickle file instead of directly return it to avoid a large amount of data being stored in the memory
         return zip_prefix,store_path
     except Exception as e:
-        raise RuntimeError(f"{zip_filename}/{data_filename}未能正常解析请核查，原因是{e}")
+        print(e)
+        raise RuntimeError(f"{zip_filename}/{data_filename}未能正常解析请核查")
 
 def concatDataFilesNachZipPrefix(runtime_code,zip_starts_with,target_folder,read_table_params,ts_index_column_name,skiprows,csv_delimiter,filter_conditions):
     # concat the data files according to the same zip prefix
@@ -336,9 +337,16 @@ def concatCnrdsMain(runtime_code,target_folder,usecols,ts_index_column_name,filt
     if convert_str_columns[0][0]=="auto":
         convert_str_columns=tuple(col for col in common_columns_4_index if re.search(r"(^(symbol|code|id|cd))|((symbol|code|id|cd)$)",col,flags=re.I))
         print(f"自动推断convert_str_columns为{convert_str_columns}")
+    else:
+        convert_str_columns=convert_str_columns[0]
     chunks=tuple(tuple((file,common_columns_4_index,ts_index_column_name,filter_conditions,skiprows,csv_delimiter,convert_str_columns)) for file in news_info_folders)
     with mp.Pool() as pool:
         results=pool.map(concatOneCnrdsFile,chunks)
+    # for debug
+    # results=[]
+    # for chunk in chunks:
+    #     result=concatOneCnrdsFile(chunk)
+    #     results.append(result)
     concated_df=pd.concat(results,axis=0)
     concated_df.sort_index(inplace=True)
     saveConcatedDataAsFinalResult(runtime_code,concated_df,output_filename,clear_respawnpoint_upon_conplete)
