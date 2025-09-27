@@ -16,21 +16,26 @@ import warnings
 warnings.filterwarnings("ignore",category=UserWarning,module='openpyxl') # to supress UserWarning: Workbook contains no default style, apply openpyxl's default
 
 # common tool functions are as follows
-def ensureDFCorrectPklDump(df,filepath):
-    # ensure that Dataframe are correctly write into pickle file
+def ensureCorrectPklDump(obj,filepath):
+    # ensure that objects written into pickle files can be read normally to avoid corrupted writing
+    fail=0
     path=Path(filepath)
     pathname=path.parent
     filename=path.name
-    pickle.dump(df, open(pathname/f"tmp_{filename}", "wb"))
+    pickle.dump(obj,open(pathname/f"tmp_{filename}", "wb"))
     while True:
-        saved_df=pickle.load(open(pathname/f"tmp_{filename}","rb"))
-        if saved_df.equals(df):
-            if os.path.exists(path):
-                os.remove(path)
-            os.rename(pathname/f"tmp_{filename}",path)
-            return None
-        else:
-            pickle.dump(df, open(pathname/f"tmp_{filename}", "wb"))
+        if fail>2:
+            raise RuntimeError(f"写入pickle文件已经失败了{fail}次，请检查写入对象的完整性")
+        try:
+            pickle.load(open(pathname/f"tmp_{filename}","rb"))
+            break
+        except:
+            fail+=1
+            pickle.dump(obj,open(pathname/f"tmp_{filename}","wb"))
+    if os.path.exists(path):
+        os.remove(path)
+    os.rename(pathname/f"tmp_{filename}",path)
+    return None
 
 def forceConvertIntoDatetimeIndex(df,fileName="表格"):
     # iterate through the index of the dataframe and convert it into datetime index
@@ -143,11 +148,11 @@ def filterDF(df,filter_conditions,dfName="表格"):
 def saveConcatedDataAsFinalResult(runtime_code,concatedDF,output_filename,clear_respawnpoint_upon_conplete):
     # the end process of the concatDF, including writing the final result to the disk and clear the respawnpoint folder
     if not clear_respawnpoint_upon_conplete or not output_filename:
-        ensureDFCorrectPklDump(concatedDF,f"respawnpoint/{runtime_code}_news_info.pkl")
+        ensureCorrectPklDump(concatedDF,f"respawnpoint/{runtime_code}_news_info.pkl")
     if output_filename:
         print("开始将最终结果写入硬盘")
         if output_filename.endswith(".pkl"):
-            ensureDFCorrectPklDump(concatedDF,f"finalresults/{output_filename}")
+            ensureCorrectPklDump(concatedDF,f"finalresults/{output_filename}")
         elif output_filename.endswith(".xlsx"):
             outputAsXlsx(concatedDF,output_filename,"finalresults")
         elif output_filename.endswith(".csv"):
@@ -266,7 +271,7 @@ def readDataFileFromZipFile(chunk):
             store_path=f"respawnpoint/{runtime_code}_{zip_prefix}_{np.random.randint(10000,100000)}.pkl"
             if not os.path.exists(store_path):
                 break
-        ensureDFCorrectPklDump(df,store_path) # here we store the data in a pickle file instead of directly return it to avoid a large amount of data being stored in the memory
+        ensureCorrectPklDump(df,store_path) # here we store the data in a pickle file instead of directly return it to avoid a large amount of data being stored in the memory
         return zip_prefix,store_path
     except Exception as e:
         print(e)
