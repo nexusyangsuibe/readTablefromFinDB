@@ -204,7 +204,7 @@ def checkColumnNamesValidity(usecols,ts_index_column_name,skiprows,target_folder
             raise ValueError(f"指定的{usecols=}与{zip_starts_with=}的长度不匹配，请核查")
         common_columns_4_index=set.intersection(*(set(usecol) for usecol in usecols))
     if ts_index_column_name=="auto":
-        potential_ts_idx_col=tuple(col for col in common_columns_4_index if re.search(r"(^(date|dt|month|mnt|year|yr|Accper))|((date|dt|month|mnt|year|yr|Accper)$)",col,flags=re.I))
+        potential_ts_idx_col=tuple(col for col in common_columns_4_index if re.search(r"(^(date|dt|month|mnt|year|yr|Accper|day))|((date|dt|month|mnt|year|yr|Accper|day)$)",col,flags=re.I))
         if len(potential_ts_idx_col)==0:
             print(f"在共同列{common_columns_4_index}中没有找到看似可以作为时间序列索引的列名")
             ts_index_column_name=None
@@ -338,6 +338,8 @@ def concatCnrdsMain(runtime_code,target_folder,usecols,ts_index_column_name,filt
         for filename in filenames:
             if filename.split(".")[-1] in ["xlsx","csv"]:
                 news_info_folders.append(os.path.join(filepath,filename))
+    if not news_info_folders:
+        raise FileNotFoundError(f"在目标文件夹{target_folder}中找到了以下文件{os.listdir(target_folder)}，其中没有找到任何以xlsx或csv为后缀名的文件，请检查")
     common_columns_4_index,_,_,ts_index_column_name=checkColumnNamesValidity(usecols,ts_index_column_name,skiprows,news_info_folders)
     if convert_str_columns[0][0]=="auto":
         convert_str_columns=tuple(col for col in common_columns_4_index if re.search(r"(^(symbol|code|id|cd))|((symbol|code|id|cd)$)",col,flags=re.I))
@@ -405,7 +407,7 @@ def readTablefromFinDB(runtime_code,data_source,target_folder,csv_delimiter,usec
         if (type(zip_starts_with)==str and (zip_starts_with=="all" or zip_starts_with=="auto")) or (type(zip_starts_with) in (list,tuple) and len(zip_starts_with)<1):
             if usecols[0][0]!="all" and usecols[0][0]!="auto":
                 raise ValueError("当zip_starts_with为'all'或'auto'时usecols也应为'all'或'auto'，否则无法正确推断读取文件的顺序")
-            zip_starts_with=tuple(set(re.match(r"(.+?)(\d+).*\.zip",filename).group(1) for filename in os.listdir(target_folder)))
+            zip_starts_with=tuple(set(re.match(r"^(.+?)(\d+).*\.zip$",filename).group(1) for filename in os.listdir(target_folder)))
             print(f"在目标文件夹{target_folder}中找到了{len(zip_starts_with)}个不同的文件前缀，分别为{zip_starts_with}")
             if not zip_starts_with:
                 raise FileNotFoundError(f"在目标文件夹{target_folder}中找到了以下文件{os.listdir(target_folder)}，其中没有识别到任何符合csmar命名格式的zip文件，若您已经重命名了压缩文件请尝试手动指定需要被读取的压缩文件名，若您已经将文件解压缩请尝试将data_source指定为folder，若前两种情况未命中请检查您target_folder路径是否正确")
@@ -423,6 +425,8 @@ def readTablefromFinDB(runtime_code,data_source,target_folder,csv_delimiter,usec
                             print(f"列{col}在{overlapped_column[0]}中的与{overlapped_column[1]}中重名，将{referenceResult[0]}中的列名重命名为'{col}_von_{referenceResult[0]}'")
                             referenceResult[1].rename(columns={col:f"{col}_von_{referenceResult[0]}"},inplace=True)
             concated_df=reduce(lambda df1,df2:df1.join(df2,how="outer"),(concated_df[1].set_index(common_columns_4_index) for concated_df in concated_dfs))
+            if len(zip_starts_with)==1 and not ts_index_column_name:
+                concated_df.reset_index(inplace=True)
             if ts_index_column_name:
                 concated_df=concated_df.reset_index().set_index(ts_index_column_name)
                 concated_df=forceConvertIntoDatetimeIndex(concated_df,"concated_df")
