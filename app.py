@@ -1,6 +1,5 @@
 from readTablefromFinDB import readTablefromFinDBusingConfigMenu
 import time
-import os
 
 if __name__=="__main__":
 
@@ -12,7 +11,7 @@ if __name__=="__main__":
         "csv_delimiter":",", # csv分隔符，可选项，默认为英语逗号，仅在读取csv文件时生效
         "usecols":"all", # 表格中要读取的列的列名，可选项，默认为'all'即读取所有列，若指定则只读取指定列，指定的格式为list[str]或list[list[str],list[str],...]或以空格分隔的字段名（方便直接从excel中复制）或包含以空格分隔的字段名的字典
         "ts_index_column_name":"auto", # 作为索引的时间序列的列名，可选项，默认为"auto"即根据列名是否以date|dt|month|mnt|year|yr开头或结尾自动判断，可以用字符串格式指定，若指定则会自动转为pd.DateTimeIndex格式并升序排列，若设为None不指定则不会转换时间序列格式
-        "skiprows":[1,2], # 读取表格时要跳过的行，可选项，默认为[1,2]，从0开始计数。从CSMAR下载的数据一般需要跳过[1,2]，即中文表名列与单位列；从CNRDS下载的数据一般需要跳过[1]
+        "skiprows":[1,2], # 读取表格时要跳过的行，可选项，当data_source为zip时默认为[1,2]，当data_source为folder时默认为[1]，从0开始计数。从CSMAR下载的数据一般需要跳过[1,2]，即中文表名列与单位列；从CNRDS下载的数据一般需要跳过[1]
         "convert_str_columns":"auto", # 需要被强制转为字符串类型的列的列名，可选项，默认为"auto"即根据列名是否以id|cd|code|symbol开头或结尾自动判断，作用是防止股票代码等以一串数字标识但不应该参与代数运算的字符串被当作其他格式处理，可以通过list[str]或list[list[str],list[str],...]或以空格分隔的字段名或包含以空格分隔的字段名的字典格式手动指定列名，不需要转换可以设置为None
         "output_filename":"your_output_filename.pkl/xlsx", # 输出文件名，可选项，默认为None即不需要输出，为防止文本中逗号与逗号分隔符混淆不支持csv，支持xlsx，数据量较大时会以1000000行为分割输出多个excel文件，支持pickle(.pkl)格式，输出文件会出现在finalresults文件夹中
         "zip_starts_with":"all", # 压缩文件名开头，可选项，默认为"all"即读入target_folder中所有的压缩文件，用于当target_folder中有多种数据时可以据此选择性读入想要的，当定义为列表或元组时会根据共同列横向合并多个表格，当且仅当data_source为zip或csmar时有效
